@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Viewer | Auto Garage Scraper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <nav class="bg-white p-4 shadow-sm border-b flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <img src="/static/logo.png" alt="Logo" class="h-8 w-8 object-contain rounded border border-gray-200" onerror="this.style.display='none'">
+            <h1 class="text-xl font-bold text-gray-800 tracking-tight">Auto Garage</h1>
+            <a href="/dashboard" class="text-gray-500 hover:text-blue-600 font-medium ml-4 transition">Live Scrape</a>
+            <a href="/database-viewer" class="text-blue-600 font-bold ml-4 underline underline-offset-8 border-blue-600">Database</a>
+        </div>
+        <a href="/" class="text-sm bg-red-50 text-red-600 font-bold hover:bg-red-100 px-4 py-2 rounded transition">Logout</a>
+    </nav>
+
+    <div class="container mx-auto p-6 mt-4">
+        <div class="mb-6 flex justify-between items-end">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Saved Database</h2>
+                <p class="text-gray-500 text-sm mt-1">Manage and view all garages saved to PostgreSQL.</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-600 uppercase text-xs font-bold tracking-wider">
+                            <th class="p-4 border-b">ID</th>
+                            <th class="p-4 border-b">Garage Name</th>
+                            <th class="p-4 border-b">Location</th>
+                            <th class="p-4 border-b">Phone</th>
+                            <th class="p-4 border-b">Source</th>
+                            <th class="p-4 border-b text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dbTableBody" class="divide-y divide-gray-100">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let databaseData = [];
+
+        async function loadData() {
+            try {
+                const res = await fetch('/api/garages');
+                databaseData = await res.json();
+
+                const tbody = document.getElementById('dbTableBody');
+                tbody.innerHTML = "";
+
+                if (databaseData.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-500">No garages saved yet. Go to Live Scrape to add some!</td></tr>`;
+                    return;
+                }
+
+                databaseData.forEach((g, index) => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-blue-50 transition-colors group">
+                            <td class="p-4 text-sm text-gray-500 font-medium">#${g.id}</td>
+                            <td class="p-4">
+                                <div class="font-bold text-gray-800 flex items-center gap-2">
+                                    ${g.name}
+                                    <a href="${g.source_url}" target="_blank" title="View Original Source" class="text-gray-400 hover:text-blue-500 transition opacity-0 group-hover:opacity-100">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    </a>
+                                </div>
+                            </td>
+                            <td class="p-4 text-sm text-gray-600">${g.location}</td>
+                            <td class="p-4 text-sm text-gray-600 font-mono">${g.phone}</td>
+                            <td class="p-4">
+                                <span class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide border">${g.source}</span>
+                            </td>
+                            <td class="p-4 text-right space-x-3">
+                                <button onclick="viewDetails(${index})" class="text-green-600 font-semibold hover:text-green-800 text-sm transition">View</button>
+                                <button onclick="editGarage(${g.id}, '${g.name.replace(/'/g, "\\'")}', '${g.location.replace(/'/g, "\\'")}', '${g.phone.replace(/'/g, "\\'")}')" class="text-blue-600 font-semibold hover:text-blue-800 text-sm transition">Edit</button>
+                                <button onclick="deleteGarage(${g.id})" class="text-red-500 font-semibold hover:text-red-700 text-sm transition">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (error) {
+                Swal.fire('Error', 'Failed to load database records.', 'error');
+            }
+        }
+
+        function viewDetails(index) {
+            const g = databaseData[index];
+            let hoursHtml = '<ul class="text-sm text-gray-700 mt-1 mb-4 space-y-1 bg-gray-50 p-3 rounded border">';
+            if (g.extra_data && g.extra_data.hours && Object.keys(g.extra_data.hours).length > 0) {
+                for (const [day, time] of Object.entries(g.extra_data.hours)) {
+                    hoursHtml += `<li class="flex justify-between"><span class="font-semibold">${day}:</span> <span>${time}</span></li>`;
+                }
+            } else { hoursHtml += `<li>No working hours available.</li>`; }
+            hoursHtml += '</ul>';
+
+            let servicesHtml = '';
+            if (g.extra_data && g.extra_data.services && g.extra_data.services.length > 0) {
+                servicesHtml = '<div class="mt-2 mb-4 flex flex-wrap gap-1">';
+                g.extra_data.services.forEach(s => { servicesHtml += `<span class="bg-blue-50 border border-blue-100 text-blue-700 text-xs px-2 py-1 rounded">${s}</span>`; });
+                servicesHtml += '</div>';
+            } else { servicesHtml = '<p class="text-sm text-gray-500 mb-4">No services listed.</p>'; }
+
+            const overviewText = (g.extra_data && g.extra_data.overview && g.extra_data.overview !== "N/A") ? `<p class="text-sm text-gray-600 italic bg-gray-50 p-3 border-l-4 border-blue-400 mb-4">${g.extra_data.overview}</p>` : '';
+            const mapLink = (g.extra_data && g.extra_data.map_link && g.extra_data.map_link !== "N/A") ? `<a href="${g.extra_data.map_link}" target="_blank" class="block w-full bg-blue-50 text-blue-600 border border-blue-200 font-bold px-4 py-2 rounded text-center hover:bg-blue-100 transition shadow-sm">🗺️ Open in Google Maps</a>` : '';
+
+            Swal.fire({
+                title: `<div class="text-xl font-bold text-gray-800 border-b pb-2 mb-2">${g.name}</div>`,
+                html: `
+                    <div class="text-left">
+                        ${overviewText}
+                        <h4 class="font-bold text-gray-800 text-sm uppercase tracking-wider mb-1">Services Offered</h4>
+                        ${servicesHtml}
+                        <h4 class="font-bold text-gray-800 text-sm uppercase tracking-wider mb-1">Working Hours</h4>
+                        ${hoursHtml}
+                        ${mapLink}
+                    </div>
+                `,
+                width: '600px',
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'Close Details'
+            });
+        }
+
+        async function editGarage(id, oldName, oldLoc, oldPhone) {
+            const { value: formValues } = await Swal.fire({
+                title: 'Edit Garage details',
+                html:
+                    `<div class="space-y-4 text-left">` +
+                    `<div><label class="font-semibold text-sm text-gray-600">Garage Name</label><input id="swal-input1" class="swal2-input !m-0 !w-full" value="${oldName}"></div>` +
+                    `<div><label class="font-semibold text-sm text-gray-600">Location</label><input id="swal-input2" class="swal2-input !m-0 !w-full" value="${oldLoc}"></div>` +
+                    `<div><label class="font-semibold text-sm text-gray-600">Phone</label><input id="swal-input3" class="swal2-input !m-0 !w-full" value="${oldPhone}"></div>` +
+                    `</div>`,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                confirmButtonText: 'Save Changes',
+                preConfirm: () => {
+                    return [
+                        document.getElementById('swal-input1').value,
+                        document.getElementById('swal-input2').value,
+                        document.getElementById('swal-input3').value
+                    ]
+                }
+            });
+
+            if (formValues) {
+                await fetch(`/api/garages/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: formValues[0], location: formValues[1], phone: formValues[2]})
+                });
+                Swal.fire({title: 'Updated!', icon: 'success', timer: 1500, showConfirmButton: false});
+                loadData();
+            }
+        }
+
+        async function deleteGarage(id) {
+            const result = await Swal.fire({
+                title: "Are you sure?",
+                text: "You won't be able to revert this!",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#ef4444",
+                cancelButtonColor: "#6b7280",
+                confirmButtonText: "Yes, delete it!"
+            });
+
+            if (result.isConfirmed) {
+                await fetch(`/api/garages/${id}`, { method: 'DELETE' });
+                Swal.fire({title: 'Deleted!', icon: 'success', timer: 1500, showConfirmButton: false});
+                loadData();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

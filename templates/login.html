@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Auto Garage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen font-sans">
+    <div class="bg-white p-10 rounded-xl shadow-lg w-[400px] border border-gray-100">
+        <div class="flex justify-center mb-6">
+            <img src="/static/logo.png" alt="Logo" class="h-16 object-contain" onerror="this.style.display='none'">
+        </div>
+        <h2 class="text-2xl font-extrabold mb-8 text-center text-gray-800 tracking-tight">Admin Portal</h2>
+        <form action="/login" method="POST" class="space-y-6">
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="username">Username</label>
+                <input class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition" id="username" name="username" type="text" placeholder="admin" required>
+            </div>
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="password">Password</label>
+                <input class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition" id="password" name="password" type="password" placeholder="••••••••" required>
+            </div>
+            <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-150" type="submit">
+                Sign In to Dashboard
+            </button>
+        </form>
+    </div>
+</body>
+</html>

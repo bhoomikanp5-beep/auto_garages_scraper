@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Scraper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <nav class="bg-white p-4 shadow-sm border-b flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <img src="/static/logo.png" alt="Logo" class="h-8 w-8 object-contain rounded border border-gray-200" onerror="this.style.display='none'">
+            <h1 class="text-xl font-bold text-gray-800">Auto Garage</h1>
+            <a href="/dashboard" class="text-blue-600 font-bold ml-4 underline underline-offset-8 border-blue-600">Live Scrape</a>
+            <a href="/database-viewer" class="text-gray-500 hover:text-blue-600 font-medium ml-4 transition">Database</a>
+        </div>
+        <a href="/" class="text-sm bg-red-50 text-red-600 font-bold hover:bg-red-100 px-4 py-2 rounded transition">Logout</a>
+    </nav>
+
+    <div class="container mx-auto p-6 mt-4">
+        <div class="bg-white p-6 rounded-xl border shadow-sm flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Target Website</label>
+                <select id="sourceSelect" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+                    <option value="mechanicar">Mechanicar (Germany)</option>
+                </select>
+            </div>
+
+            <div class="w-32">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Scrape Limit</label>
+                <select id="limitSelect" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+                    <option value="2">2 items (Fast Test)</option>
+                    <option value="5" selected>5 items</option>
+                    <option value="10">10 items</option>
+                    <option value="25">25 items</option>
+                </select>
+            </div>
+
+            <div class="flex-2 min-w-[300px]">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Search Keyword / City</label>
+                <input type="text" id="keywordInput" placeholder="e.g. Garages in Cologne" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
+            </div>
+
+            <button onclick="startScrape()" id="scrapeBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-sm transition">Run Scrape</button>
+            <button onclick="stopScrape()" id="stopBtn" class="hidden bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-8 rounded-lg shadow-sm transition">Stop</button>
+        </div>
+
+        <div id="statusText" class="text-center mt-6 text-gray-500 font-semibold animate-pulse"></div>
+        <div id="resultsContainer" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+
+    <script>
+        let scrapedData = [];
+        let eventSource;
+
+        function startScrape() {
+            const kw = document.getElementById('keywordInput').value;
+            const src = document.getElementById('sourceSelect').value;
+            const limit = document.getElementById('limitSelect').value;
+
+            document.getElementById('scrapeBtn').classList.add('hidden');
+            document.getElementById('stopBtn').classList.remove('hidden');
+            document.getElementById('resultsContainer').innerHTML = "";
+            scrapedData = [];
+
+            document.getElementById('statusText').innerText = "Initializing Browser...";
+
+            eventSource = new EventSource(`/api/live-scrape?website=${src}&keyword=${encodeURIComponent(kw)}&limit=${limit}`);
+
+            eventSource.onmessage = function(event) {
+                const res = JSON.parse(event.data);
+
+                if (res.type === "info") {
+                    document.getElementById('statusText').innerText = res.message;
+                }
+                else if (res.type === "result") {
+                    const g = res.data;
+                    scrapedData.push(g);
+                    const index = scrapedData.length - 1;
+
+                    const savedBadge = g.is_saved ? `<span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded absolute top-3 right-3 shadow-sm border border-green-200">✓ SAVED</span>` : '';
+                    const saveButton = g.is_saved ? '' : `<button onclick="saveDB(${index}, this)" class="mt-4 w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-lg transition shadow-sm">Save to Database</button>`;
+
+                    document.getElementById('resultsContainer').innerHTML += `
+                        <div class="bg-white border rounded-xl p-5 shadow-sm hover:shadow-lg transition relative cursor-pointer group" onclick="viewDetails(${index})">
+                            ${savedBadge}
+                            <div class="flex justify-between items-start pr-16">
+                                <h3 class="font-bold text-lg text-gray-800 truncate pr-2 group-hover:text-blue-600 transition">${g.name}</h3>
+                                <a href="${g.source_url}" target="_blank" onclick="event.stopPropagation()" class="text-gray-400 hover:text-blue-500 bg-gray-50 p-1.5 rounded" title="Open Source">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                </a>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-2 font-medium">📍 ${g.location}</p>
+                            <p class="text-sm text-gray-500 mt-1 font-mono">📞 ${g.phone}</p>
+                            ${saveButton}
+                        </div>
+                    `;
+                }
+                else if (res.type === "done") {
+                    document.getElementById('statusText').innerText = "Scraping Complete.";
+                    resetButtons();
+                }
+            };
+
+            eventSource.onerror = function() {
+                resetButtons();
+            };
+        }
+
+        async function stopScrape() {
+            await fetch('/api/stop-scrape');
+            document.getElementById('statusText').innerText = "Stopping sequence initiated...";
+        }
+
+        function resetButtons() {
+            if(eventSource) eventSource.close();
+            document.getElementById('scrapeBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+        }
+
+        function viewDetails(index) {
+            const g = scrapedData[index];
+            let hoursHtml = '<ul class="text-sm text-gray-700 mt-1 mb-4 space-y-1 bg-gray-50 p-3 rounded border">';
+            if (g.extra_data && g.extra_data.hours && Object.keys(g.extra_data.hours).length > 0) {
+                for (const [day, time] of Object.entries(g.extra_data.hours)) {
+                    hoursHtml += `<li class="flex justify-between"><span class="font-semibold">${day}:</span> <span>${time}</span></li>`;
+                }
+            } else { hoursHtml += `<li>No working hours available.</li>`; }
+            hoursHtml += '</ul>';
+
+            let servicesHtml = '';
+            if (g.extra_data && g.extra_data.services && g.extra_data.services.length > 0) {
+                servicesHtml = '<div class="mt-2 mb-4 flex flex-wrap gap-1">';
+                g.extra_data.services.forEach(s => { servicesHtml += `<span class="bg-blue-50 border border-blue-100 text-blue-700 text-xs px-2 py-1 rounded">${s}</span>`; });
+                servicesHtml += '</div>';
+            } else { servicesHtml = '<p class="text-sm text-gray-500 mb-4">No services listed.</p>'; }
+
+            const overviewText = (g.extra_data && g.extra_data.overview && g.extra_data.overview !== "N/A") ? `<p class="text-sm text-gray-600 italic bg-gray-50 p-3 border-l-4 border-blue-400 mb-4">${g.extra_data.overview}</p>` : '';
+            const mapLink = (g.extra_data && g.extra_data.map_link && g.extra_data.map_link !== "N/A") ? `<a href="${g.extra_data.map_link}" target="_blank" class="block w-full bg-blue-50 text-blue-600 border border-blue-200 font-bold px-4 py-2 rounded text-center hover:bg-blue-100 transition shadow-sm">🗺️ Open in Google Maps</a>` : '';
+
+            Swal.fire({
+                title: `<div class="text-xl font-bold text-gray-800 border-b pb-2 mb-2">${g.name}</div>`,
+                html: `
+                    <div class="text-left">
+                        ${overviewText}
+                        <h4 class="font-bold text-gray-800 text-sm uppercase tracking-wider mb-1">Services Offered</h4>
+                        ${servicesHtml}
+                        <h4 class="font-bold text-gray-800 text-sm uppercase tracking-wider mb-1">Working Hours</h4>
+                        ${hoursHtml}
+                        ${mapLink}
+                    </div>
+                `,
+                width: '600px',
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'Close'
+            });
+        }
+
+
+        async function saveDB(index, btnElement) {
+            event.stopPropagation(); // Prevents the card click modal from opening
+
+            // Create a clean copy of the payload without the UI flags
+            const payload = { ...scrapedData[index] };
+            delete payload.is_saved;
+
+            try {
+                const response = await fetch('/api/garages/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+
+                const res = await response.json();
+
+                if (response.ok && res.message === "Saved successfully!") {
+                    btnElement.outerHTML = `<span class="block mt-4 text-center text-green-600 bg-green-50 rounded py-2 font-bold border border-green-200">✓ Added to Database</span>`;
+
+                    // Toast notification in the top right corner
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'Saved to PostgreSQL',
+                        showConfirmButton: false,
+                        timer: 1500
+                    });
+                } else {
+                    // This catches the "Already exists" message
+                    Swal.fire('Notice', res.message, 'info');
+                }
+            } catch (error) {
+                console.error("Save Error:", error);
+                Swal.fire('Error', 'Failed to save to database. Check PyCharm terminal.', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
